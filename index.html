@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notebook Encryptor</title>
+    <!-- Tailwind CSS for modern, clean styling -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    
+    <!-- PWA Manifest Inline Manifest Link Injection via Data URI -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIk5vdGVib29rIEVuY3J5cHRvciIsCiAgInNob3J0X25hbWUiOiAiRW5jcnlwdG9yIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMjEyMTIiLAogICJ0aGVtZV9jb2xvciI6IiMxMjEyMTIiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUJrYVhObGN6bHpkV0p0YVdROVBpNXdaR1lhV052Yms5eVp5QStQSE4wY21sdVp6NDhMM04wY21sdVp6ND0iLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3N2Zyt4bWwiCiAgICB9CiAgXQp9">
+    
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body class="bg-[#121212] text-[#e3e2e6] min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Container Layout ordered chronologically from top to bottom -->
+    <main class="w-full max-w-lg space-y-5">
+        
+        <!-- 1. Input Field (Top) -->
+        <div>
+            <label class="block text-xs font-semibold text-[#c4c6d0] mb-2 px-1">Input Data</label>
+            <textarea id="inputData" placeholder="Type or paste text here..." class="w-full bg-[#1e1e1e] border-2 border-[#333333] rounded-3xl (24px) px-5 py-4 text-white font-mono focus:outline-none focus:border-[#d81b60] transition-all h-36 resize-none placeholder-gray-600"></textarea>
+        </div>
+
+        <!-- 2. Secret PIN (Directly Below Input) -->
+        <div>
+            <label class="block text-xs font-semibold text-[#c4c6d0] mb-2 px-1">Secret PIN (Numbers Only)</label>
+            <input type="password" id="pinField" pattern="[0-8]*" inputmode="numeric" placeholder="••••" class="w-full bg-[#1e1e1e] border-2 border-[#333333] rounded-3xl (24px) px-5 py-4 text-white tracking-widest font-mono focus:outline-none focus:border-[#d81b60] transition-all">
+        </div>
+
+        <!-- 3. Interlocking Action Buttons Side-by-Side -->
+        <div class="grid grid-cols-2 gap-4">
+            <button id="encryptBtn" class="bg-[#d81b60] text-white font-bold py-4 rounded-3xl (24px) shadow-lg active:scale-95 transition-all cursor-pointer">
+                Encrypt
+            </button>
+            <button id="decryptBtn" class="bg-[#2196f3] text-white font-bold py-4 rounded-3xl (24px) shadow-lg active:scale-95 transition-all cursor-pointer">
+                Decrypt
+            </button>
+        </div>
+
+        <!-- 4. Dynamic Color-State Output Field (Bottom) -->
+        <div>
+            <label class="block text-xs font-semibold text-[#c4c6d0] mb-2 px-1">Output Data</label>
+            <textarea id="outputData" readonly placeholder="Resulting output will appear here..." class="w-full bg-[#1e1e1e] border-2 border-[#333333] rounded-3xl (24px) px-5 py-4 text-white font-mono focus:outline-none transition-all h-36 resize-none placeholder-gray-600"></textarea>
+        </div>
+
+    </main>
+
+    <script>
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        // 1. High-security 256-bit Key Derivation (PBKDF2)
+        async function deriveKey(pin, salt) {
+            const baseKey = await window.crypto.subtle.importKey(
+                "raw", encoder.encode(pin), { name: "PBKDF2" }, false, ["deriveKey"]
+            );
+            return window.crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 600000,
+                    hash: "SHA-256"
+                },
+                baseKey,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        // Helper UI State Engine to color theme, handle disabled interlocking, and lock text to white
+        function applyUiState(mode) {
+            const outputField = document.getElementById("outputData");
+            const encryptBtn = document.getElementById("encryptBtn");
+            const decryptBtn = document.getElementById("decryptBtn");
+
+            if (mode === "encrypt") {
+                // Background & border changes to Dark Pink. Text is kept explicitly pure white.
+                outputField.style.backgroundColor = "#d81b60";
+                outputField.style.borderColor = "#d81b60";
+                outputField.style.color = "#ffffff";
+                
+                // Interlock: Disable Decrypt
+                decryptBtn.disabled = true;
+                decryptBtn.style.opacity = "0.3";
+                decryptBtn.style.cursor = "not-allowed";
+            } else if (mode === "decrypt") {
+                // Background & border changes to Material Blue. Text is kept explicitly pure white.
+                outputField.style.backgroundColor = "#2196f3";
+                outputField.style.borderColor = "#2196f3";
+                outputField.style.color = "#ffffff";
+                
+                // Interlock: Disable Encrypt
+                encryptBtn.disabled = true;
+                encryptBtn.style.opacity = "0.3";
+                encryptBtn.style.cursor = "not-allowed";
+            } else {
+                // Reset to baseline neutral state
+                outputField.style.backgroundColor = "#1e1e1e";
+                outputField.style.borderColor = "#333333";
+                outputField.style.color = "#ffffff";
+                
+                encryptBtn.disabled = false;
+                encryptBtn.style.opacity = "1";
+                encryptBtn.style.cursor = "pointer";
+                
+                decryptBtn.disabled = false;
+                decryptBtn.style.opacity = "1";
+                decryptBtn.style.cursor = "pointer";
+            }
+        }
+
+        // Reset interlock buttons whenever user types inside inputs
+        document.getElementById("inputData").addEventListener("input", () => applyUiState("reset"));
+        document.getElementById("pinField").addEventListener("input", () => applyUiState("reset"));
+
+        // 2. Encryption Execution Lifecycle
+        document.getElementById("encryptBtn").addEventListener("click", async () => {
+            const plaintext = document.getElementById("inputData").value;
+            const pin = document.getElementById("pinField").value;
+            if (!plaintext || !pin) return;
+
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(pin, salt);
+
+            const ciphertextBuffer = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv }, key, encoder.encode(plaintext)
+            );
+
+            const resultPayload = new Uint8Array(salt.length + iv.length + ciphertextBuffer.byteLength);
+            resultPayload.set(salt, 0);
+            resultPayload.set(iv, salt.length);
+            resultPayload.set(new Uint8Array(ciphertextBuffer), salt.length + iv.length);
+
+            // Safe Base64 text encoding string matching layout requirements
+            document.getElementById("outputData").value = btoa(String.fromCharCode(...resultPayload));
+            applyUiState("encrypt");
+        });
+
+        // 3. Decryption Execution Lifecycle
+        document.getElementById("decryptBtn").addEventListener("click", async () => {
+            const base64Data = document.getElementById("inputData").value;
+            const pin = document.getElementById("pinField").value;
+            if (!base64Data || !pin) return;
+
+            try {
+                const rawPayload = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+                
+                const salt = rawPayload.slice(0, 16);
+                const iv = rawPayload.slice(16, 28);
+                const ciphertext = rawPayload.slice(28);
+
+                const key = await deriveKey(pin, salt);
+                const decryptedBuffer = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv }, key, ciphertext
+                );
+
+                document.getElementById("outputData").value = decoder.decode(decryptedBuffer);
+                applyUiState("decrypt");
+            } catch (e) {
+                document.getElementById("outputData").value = "Error: Invalid payload data or incorrect PIN entry.";
+                applyUiState("reset");
+            }
+        });
+
+        // 4. Register Inline PWA Service Worker to make the app installable via Mobile Chrome
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    self.addEventListener('install', (e) => self.skipWaiting());
+                    self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
+                    self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request).catch(() => new Response("Offline active."))));
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(err => console.log(err));
+            });
+        }
+    </script>
+</body>
+</html>
